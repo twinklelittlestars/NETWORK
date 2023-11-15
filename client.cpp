@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-
+#pragma comment (lib, "ws2_32.lib")
 using namespace std;
 const int MaxMsgSize = 15000;// 最大文件大小
 const int MaxPacketSize = 1500;// 最大发送数据包
@@ -16,27 +16,6 @@ const int MaxSendTimeOver = 1500;
 
 const int TranPort = 10000;
 const int clientPort = 20000;
-
-//UDP协议中连接服务器的相关实现
-class ReliableUDPClient {
-public:
-    ReliableUDPClient();
-    void connectToServer(const std::string& serverIp, int serverPort);// 连接到服务器
-    void sendFile(const std::string& filePath);// 发送文件
-    void closeConnection();// 关闭连接
-    void initializeSocket();     // 初始化套接字
-
-private:
-    SOCKET clientSocket;//客户端套接字
-    SOCKADDR_IN serverAddress;
-    unsigned int sequenceNumber;
-
-    void performHandshake();     // 三次握手
-    void performClosure();       // 四次挥手
-    void sendPacket(const Packet& packet);// 发送数据包
-    bool waitForAck(Packet& packet);// 等待确认
-    void logPacket(const Packet& packet);// 日志记录函数
-};
 
 //数据包结构体
 struct Packet {
@@ -53,13 +32,11 @@ struct Packet {
     void computeChecksum();// 计算校验和
     bool verifyChecksum() const;// 验证校验和
 };
-
 Packet::Packet() 
     : srcIP(0), destIP(0), srcPort(0), destPort(0), 
     seqNum(0), ackNum(0), dataSize(0), flags(0), checksum(0) {
     memset(data, 0, MaxPacketSize);// 初始化数据部分
 }
-
 //计算校验和
 void Packet::computeChecksum() {
     checksum = 0;
@@ -89,8 +66,26 @@ bool Packet::verifyChecksum() const {
     }
     return (sum == 0xFFFF);
 }
+//UDP协议中连接服务器的相关实现
+class ReliableUDPClient {
+public:
+    ReliableUDPClient();
+    void connectToServer(const std::string& serverIp, int serverPort);// 连接到服务器
+    void sendFile(const std::string& filePath);// 发送文件
+    void closeConnection();// 关闭连接
+    void initializeSocket();     // 初始化套接字
 
+private:
+    SOCKET clientSocket;//客户端套接字
+    SOCKADDR_IN serverAddress;
+    unsigned int sequenceNumber;
 
+    void performHandshake();     // 三次握手
+    void performClosure();       // 四次挥手
+    void sendPacket(const Packet& packet);// 发送数据包
+    bool waitForAck(Packet& packet);// 等待确认
+    void logPacket(const Packet& packet);// 日志记录函数
+};
 
 //初始化WSAStartup
 ReliableUDPClient::ReliableUDPClient() 
@@ -157,7 +152,6 @@ void ReliableUDPClient::performHandshake() {
     cout << "发送SYN包" << endl;
 
     // 第二次握手: 等待SYN-ACK包
-    bool synackReceived = false;
     startTime = clock();
     while (!synackReceived) {
         if (waitForAck(synackPacket)) { // 将synackPacket传递给waitForAck函数

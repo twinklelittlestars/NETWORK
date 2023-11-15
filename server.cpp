@@ -7,7 +7,7 @@
 #include <fstream>
 #include <time.h>
 #include <vector>
-
+#pragma comment (lib, "ws2_32.lib")
 using namespace std;
 
 const int MaxMsgSize = 15000;// 最大文件大小
@@ -17,31 +17,6 @@ const int MaxSendTimeOver = 1500;
 
 const int TranPort = 10000;
 const int serverPort = 30000;
-
-//UDP协议中连接客户端的相关实现
-class ReliableUDPServer {
-public:
-    ReliableUDPServer();
-    void bindToPort(const std::string& ipAddress, int port);// 绑定到特定端口
-    void listenForClient();    // 等待客户端连接
-    void receiveFile();    // 接收文件
-    void sendDuplicateAck(const Packet& packet);// 发送重复确认
-    void writeFile(const string& fileName, const vector<char>& fileBuffer);// 写入文件
-    void closeConnection();    // 关闭连接
-    void initializeSocket();// 初始化套接字
-
-private:
-    SOCKET serverSocket;             
-    SOCKADDR_IN serverAddress;       // 服务器地址
-    SOCKADDR_IN clientAddress;       // 客户端地址
-    unsigned int sequenceNumber; 
-
-    void performHandshake(Packet& packet);     // 三次握手
-    void performClosure();       // 四次挥手
-    bool receivePacket(Packet& packet);// 接收数据包
-    void sendAck(const Packet& packet);// 发送确认
-    void logPacket(const Packet& packet);// 日志记录函数
-};
 
 // 数据包结构
 struct Packet {
@@ -58,7 +33,11 @@ struct Packet {
     void computeChecksum();    // 计算校验和
     bool verifyChecksum() const;    // 验证校验和
 };
-
+Packet::Packet() 
+    : srcIP(0), destIP(0), srcPort(0), destPort(0), 
+    seqNum(0), ackNum(0), dataSize(0), flags(0), checksum(0) {
+    memset(data, 0, MaxPacketSize);// 初始化数据部分
+}
 //计算校验和
 void Packet::computeChecksum() {
     checksum = 0;
@@ -88,6 +67,32 @@ bool Packet::verifyChecksum() const {
     }
     return (sum == 0xFFFF);
 }
+//UDP协议中连接客户端的相关实现
+class ReliableUDPServer {
+public:
+    ReliableUDPServer();
+    void bindToPort(const std::string& ipAddress, int port);// 绑定到特定端口
+    void listenForClient();    // 等待客户端连接
+    void receiveFile();    // 接收文件
+    void sendDuplicateAck(const Packet& packet);// 发送重复确认
+    void writeFile(const string& fileName, const vector<char>& fileBuffer);// 写入文件
+    void closeConnection();    // 关闭连接
+    void initializeSocket();// 初始化套接字
+
+private:
+    SOCKET serverSocket;             
+    SOCKADDR_IN serverAddress;       // 服务器地址
+    SOCKADDR_IN clientAddress;       // 客户端地址
+    unsigned int sequenceNumber; 
+
+    void performHandshake(Packet& packet);     // 三次握手
+    void performClosure();       // 四次挥手
+    bool receivePacket(Packet& packet);// 接收数据包
+    void sendAck(const Packet& packet);// 发送确认
+    void logPacket(const Packet& packet);// 日志记录函数
+};
+
+
 
 //初始化WSAStartup
 ReliableUDPServer::ReliableUDPServer() 
