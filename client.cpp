@@ -149,7 +149,7 @@ void ReliableUDPClient::performHandshake() {
     synPacket.flags = htons(0x1); //0x1 代表SYN标志位，因为发送SYN包，所以将其置位
     synPacket.computeChecksum();
     sendPacket(synPacket);
-    cout << "发送SYN包" << endl;
+    cout << "send SYN packet" << endl;
 
     // 第二次握手: 等待SYN-ACK包
     startTime = clock();
@@ -158,15 +158,15 @@ void ReliableUDPClient::performHandshake() {
             if (synackPacket.verifyChecksum() && (ntohs(synackPacket.flags) & 0x3) == 0x3) {
                 // 收到有效的SYN-ACK包
                 synackReceived = true;
-                cout << "收到了有效的SYN-ACK包" << endl;
+                cout << "Received valid SYN-ACK packet" << endl;
             } else {
-                cout << "收到了无效的SYN-ACK包，等待中..." << endl;
+                cout << "Received invalid SYN-ACK packet, waiting..." << endl;
             }
         }
         if (clock() - startTime > MaxWaitTimeOver) {
             // 超时，重发SYN包
             sendPacket(synPacket);
-            cout << "SYN-ACK包已经超时， 重发中..." << endl;
+            cout << "SYN-ACK packet timeout, resending..." << endl;
             startTime = clock();
         }
     }
@@ -177,7 +177,7 @@ void ReliableUDPClient::performHandshake() {
     ackPacket.flags = htons(0x2); // ACK flag
     ackPacket.computeChecksum();
     sendPacket(ackPacket);
-    cout << "发送ACK包， 连接建立！" << endl;
+    cout << "Sent ACK packet, connection established!" << endl;
 }
 
 //注意sendPacket和waitForAck函数需要封装sendto和recvfrom调用等底层的UDP发送和接收逻辑，并且waitForAck函数应该正确地填充synackPacket。
@@ -198,19 +198,19 @@ void ReliableUDPClient::performClosure()
     finPacket.seqNum = htonl(sequenceNumber++);
     finPacket.computeChecksum();
     sendPacket(finPacket);
-    cout << "客户端已发送第一次挥手的FIN包" << endl;
+    cout << "Client sent the first handshake FIN packet" << endl;
 
     // 第二次挥手：接收ACK包
     startTime = clock();
     while (true) {
         if (waitForAck(ackPacket)) {
             if (ackPacket.verifyChecksum() && (ntohs(ackPacket.flags) & 0x2) == 0x2) {
-                cout << "客户端已收到第二次挥手的ACK包" << endl;
+                cout << "Client received the second handshake ACK packet" << endl;
                 break;
             }
         }
         if (clock() - startTime > MaxWaitTimeOver) {
-            cout << "第一次挥手超时，正在重传FIN包" << endl;
+            cout << "First handshake timeout, resending FIN packet" << endl;
             sendPacket(finPacket);
             startTime = clock();
         }
@@ -221,12 +221,12 @@ void ReliableUDPClient::performClosure()
     while (true) {
         if (waitForAck(serverfinPacket)) {
             if (serverfinPacket.verifyChecksum() && (ntohs(serverfinPacket.flags) & 0x4) == 0x4) {
-                cout << "客户端已收到第三次挥手的FIN包" << endl;
+                cout << "Client received the third handshake FIN packet" << endl;
                 break;
             }
         }
         if (clock() - startTime > MaxWaitTimeOver) {
-            cout << "等待服务器FIN包超时，继续等待" << endl;
+            cout << "Waiting for server's FIN packet timeout, continuing to wait" << endl;
             startTime = clock();
         }
     }
@@ -236,23 +236,23 @@ void ReliableUDPClient::performClosure()
     finalackPacket.ackNum = htonl(ntohl(serverfinPacket.seqNum) + 1); // 确认号为服务器FIN序列号+1
     finalackPacket.computeChecksum();
     sendPacket(finalackPacket);
-    cout << "客户端已发送第四次挥手的ACK包" << endl;
+    cout << "Client sent the fourth handshake ACK packet" << endl;
 
     // 等待2MSL时长，确保最后的ACK不丢失
     tempClock = clock();
-    cout << "客户端开始2MSL等待..." << endl;
+    cout << "Client starts 2MSL wait..." << endl;
     Packet tmpPacket;
 
     while (clock() - tempClock < 2 * MaxWaitTimeOver) {
         if (waitForAck(tmpPacket)) {
             if (tmpPacket.verifyChecksum()) {
-                cout << "收到迟到的包，回复ACK" << endl;
+                cout << "Received a delayed packet, replying with ACK" << endl;
                 sendPacket(finalackPacket);
             }
         }
     }
 
-    cout << "\n客户端连接成功关闭！" << endl;
+    cout << "\nClient connection successfully closed!" << endl;
 }
 
 void ReliableUDPClient::sendPacket(const Packet& packet) {
@@ -263,9 +263,9 @@ void ReliableUDPClient::sendPacket(const Packet& packet) {
     // 通过UDP套接字发送数据
     int sentBytes = sendto(clientSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
     if (sentBytes == SOCKET_ERROR) {
-        cerr << "发送数据包出错：" << WSAGetLastError() << endl;
+        cout << "Error sending packet:" << WSAGetLastError() << endl;
     } else {
-        cout << "成功发送数据包！" << endl;
+        cout << "Packet sent successfully!" << endl;
     }
 }
 
@@ -278,14 +278,14 @@ bool ReliableUDPClient::waitForAck(Packet& packet) {
     if (receivedBytes > 0) {
         // 成功接收到数据包，反序列化为Packet结构体
         memcpy(&packet, buffer, sizeof(Packet));
-        cout << "成功收到数据包！" << endl;
+        cout << "Packet received successfully!" << endl;
         return true;
     } else if (receivedBytes == 0 || WSAGetLastError() == WSAEWOULDBLOCK) {
         // 没有数据可读
         return false;
     } else {
         // 接收失败
-        cerr << "接收数据包出错：" << WSAGetLastError() << endl;
+        cout << "Error receiving packet: " << WSAGetLastError() << endl;
         return false;
     }
 }
@@ -294,7 +294,7 @@ void ReliableUDPClient::sendFile(const std::string& filePath) {
     // 打开文件
     ifstream fileStream(filePath, ios::binary);
     if (!fileStream) {
-        cerr << "无法打开文件: " << filePath << endl;
+        cout << "Cannot open file: " << filePath << endl;
         return;
     }
 
@@ -304,7 +304,7 @@ void ReliableUDPClient::sendFile(const std::string& filePath) {
 
     // 文件大小超过最大限制
     if (fileData.size() > MaxMsgSize) {
-        cerr << "文件太大，无法发送。" << endl;
+        cout << "File too large to send." << endl;
         return;
     }
 
@@ -338,13 +338,13 @@ void ReliableUDPClient::sendFile(const std::string& filePath) {
             }
             if (clock() - startTime > MaxSendTimeOver) {
                 retryCount++;
-                cout << "重试发送文件信息, 尝试次数: " << retryCount << endl;
+                cout << "Retrying to send file info, attempt: " << retryCount << endl;
                 break; // 超时，重新发送
             }
         }
 
         if (retryCount >= MaxRetryCount) {
-            cerr << "文件信息发送失败，超出最大重试次数" << endl;
+            cout << "Failed to send file info, exceeded maximum retries" << endl;
             return;
         }
     }
@@ -372,19 +372,19 @@ void ReliableUDPClient::sendFile(const std::string& filePath) {
                 }
                 if (clock() - startTime > MaxSendTimeOver) {
                     retryCount++;
-                    cout << "重试发送数据块, 尝试次数: " << retryCount << ", 块偏移: " << offset << endl;
+                    cout << "Retrying to send data chunk, attempt: " << retryCount << ", chunk offset: " << offset << endl;
                     break; // 超时，重新发送
                 }
             }
 
             if (retryCount >= MaxRetryCount) {
-                cerr << "数据块发送失败，序列号: " << sequenceNumber - 1 << endl;
+                cout << "Data chunk sending failed, sequence number: " << sequenceNumber - 1 << endl;
                 return;
             }
         }
     }
 
-    cout << "文件发送完成: " << filePath << endl;
+    cout << "File sent successfully: " << filePath << endl;
 }
 
 int main()
@@ -403,21 +403,20 @@ int main()
     bool isRunning = true;
     while (isRunning) {
         string command;
-        cout << "若要发送文件请输入 'send'，若要断开连接请输入 'over'" << endl;
+        cout << "Enter 'send' to send a file, or 'over' to disconnect" << endl;
         cin >> command;
 
         if (command == "send") {
             // 传输文件
             string filename;
-            cout << "请输入文件路径：" << endl;
+            cout << "Please enter the file path:" << endl;
             cin >> filename;
             client.sendFile(filename);
         } else if (command == "over") {
             // 终止连接
             isRunning = false;
         } else {
-            cout << "输入错误，按照要求输入！" << endl;
-        }
+            cout << "Invalid input, please try again!" << endl;
     }
 
     // 关闭连接

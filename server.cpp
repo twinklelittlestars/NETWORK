@@ -142,7 +142,7 @@ void ReliableUDPServer::bindToPort(const std::string& ipAddress, int port) {
 
     // 绑定服务器套接字到指定端口
     if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
-        cerr << "Bind failed with error: " << WSAGetLastError() << endl;
+        cout << "Bind failed with error: " << WSAGetLastError() << endl;
         closesocket(serverSocket);
         WSACleanup();
         exit(EXIT_FAILURE);
@@ -161,12 +161,12 @@ bool ReliableUDPServer::receivePacket(Packet& packet) {
     int receivedBytes = recvfrom(serverSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddress, &clientAddrLen);
     if (receivedBytes > 0) {
         memcpy(&packet, buffer, sizeof(Packet));
-        cout << "成功收到数据包！" << endl;
+        cout << "Packet received successfully!" << endl;
         return true;
     } else if (receivedBytes == 0 || WSAGetLastError() == WSAEWOULDBLOCK) {
         return false;
     } else {
-        cerr << "接收数据包出错：" << WSAGetLastError() << endl;
+        cout << "Error receiving packet: " << WSAGetLastError() << endl;
         return false;
     }
 }
@@ -178,9 +178,9 @@ void ReliableUDPServer::sendAck(const Packet& packet) {
 
     int sentBytes = sendto(serverSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
     if (sentBytes == SOCKET_ERROR) {
-        cerr << "发送数据包出错：" << WSAGetLastError() << endl;
+        cout << "Error sending packet: " << WSAGetLastError() << endl;
     } else {
-        cout << "成功发送数据包！" << endl;
+        cout << "Packet sent successfully!" << endl;
     }
 }
 
@@ -190,14 +190,14 @@ const unsigned short ACK_FLAG = 0x2;
 const unsigned short SYN_ACK_FLAG = SYN_FLAG | ACK_FLAG;
 void ReliableUDPServer::listenForClient()
 {
-    cout << "等待客户端连接..." << endl;
+    cout << "Waiting for client connection..." << endl;
     Packet synPacket;
 
     while (true) {
         if (receivePacket(synPacket)) {
             // 检查是否是 SYN 包
             if ((ntohs(synPacket.flags) & SYN_FLAG) == SYN_FLAG) {
-                cout << "收到客户端的 SYN 包，序列号：" << ntohl(synPacket.seqNum) << endl;
+                cout << "SYN packet received from client, sequence number: " << ntohl(synPacket.seqNum) << endl;
                 performHandshake(synPacket);
                 break;
             }
@@ -208,7 +208,7 @@ void ReliableUDPServer::listenForClient()
 void ReliableUDPServer::performHandshake(Packet& synPacket) {
     // 首先验证收到的 SYN 包的校验和
     if (!synPacket.verifyChecksum()) {
-        cerr << "收到的 SYN 包校验和错误" << endl;
+        cout << "Checksum error in received SYN packet" << endl;
         return; // 校验和错误，终止握手过程
     }
 
@@ -221,7 +221,7 @@ void ReliableUDPServer::performHandshake(Packet& synPacket) {
     synAckPacket.seqNum = htonl(sequenceNumber++);
     synAckPacket.computeChecksum();
     sendAck(synAckPacket);
-    cout << "发送 SYN-ACK 包" << endl;
+    cout << "SYN-ACK packet sent" << endl;
 
     // 等待 ACK 包
     bool ackReceived = false;
@@ -229,14 +229,14 @@ void ReliableUDPServer::performHandshake(Packet& synPacket) {
     while (!ackReceived) {
         if (receivePacket(ackPacket)) {
             if ((ntohs(ackPacket.flags) & ACK_FLAG) == ACK_FLAG && ackPacket.verifyChecksum()) {
-                cout << "收到 ACK 包，连接建立" << endl;
+                cout << "ACK packet received, connection established" << endl;
                 ackReceived = true;
             }
         }
         if (clock() - startTime > MaxWaitTimeOver) {
             // 超时重发 SYN-ACK 包
             sendAck(synAckPacket);
-            cout << "SYN-ACK 包超时，重发中..." << endl;
+            cout << "SYN-ACK packet timed out, resending..." << endl;
             startTime = clock();
         }
     }
@@ -258,10 +258,10 @@ void ReliableUDPServer::performClosure()
     while (!finReceived) {
         if (receivePacket(finPacket)) {
             if ((ntohs(finPacket.flags) & FIN_FLAG) == FIN_FLAG && finPacket.verifyChecksum()) {
-                cout << "收到 FIN 包，序列号：" << ntohl(finPacket.seqNum) << endl;
+                cout << "FIN packet received, sequence number: " << ntohl(finPacket.seqNum) << endl;
                 finReceived = true;
             }else {
-                cout << "收到无效的 FIN 包或校验和错误" << endl;
+                cout << "Invalid FIN packet or checksum error received" << endl;
             }
         }
     }
@@ -272,14 +272,14 @@ void ReliableUDPServer::performClosure()
     ackPacket.seqNum = htonl(sequenceNumber++);
     ackPacket.computeChecksum();
     sendAck(ackPacket);
-    cout << "发送 ACK 包" << endl;
+    cout << "ACK packet sent" << endl;
 
     // 第三步: 发送FIN包
     finPacket.flags = htons(FIN_FLAG);
     finPacket.seqNum = htonl(sequenceNumber++);
     finPacket.computeChecksum();
     sendAck(finPacket);
-    cout << "发送 FIN 包" << endl;
+    cout << "FIN packet sent" << endl;
 
     // 第四步: 等待客户端的ACK包
     bool ackReceived = false;
@@ -287,23 +287,23 @@ void ReliableUDPServer::performClosure()
     while (!ackReceived) {
         if (receivePacket(ackPacket)) {
             if ((ntohs(ackPacket.flags) & ACK_FLAG) == ACK_FLAG && ackPacket.verifyChecksum()) {
-                cout << "收到 ACK 包，连接关闭" << endl;
+                cout << "ACK packet received, connection closed" << endl;
                 ackReceived = true;
             }else {
-                cerr << "收到无效的 ACK 包或校验和错误" << endl;
+                cout << "Invalid ACK packet or checksum error received" << endl;
             }
         }
         if (clock() - startTime > MaxWaitTimeOver) {
             // 超时重发FIN包
             sendAck(finPacket);
-            cout << "FIN 包超时，重发中..." << endl;
+            cout << "FIN packet timed out, resending..." << endl;
             startTime = clock();
         }
     }
 }
 
 void ReliableUDPServer::receiveFile() {
-    cout << "开始接收文件..." << endl;
+    cout << "Starting file reception..." << endl;
 
     // 文件名和大小
     string fileName;
@@ -319,7 +319,7 @@ void ReliableUDPServer::receiveFile() {
                 // 解析文件信息
                 fileName.assign(namePacket.data, strnlen(namePacket.data, sizeof(namePacket.data)));
                 fileSize = ntohl(namePacket.dataSize);
-                cout << "接收文件名为：" << fileName << "，大小为：" << fileSize << endl;
+                cout << "File name received: " << fileName << ", size: " << fileSize << endl;
 
                 // 确认文件信息包
                 Packet ackPacket;
@@ -328,7 +328,7 @@ void ReliableUDPServer::receiveFile() {
                 ackPacket.seqNum = htonl(sequenceNumber++);
                 ackPacket.computeChecksum();
                 sendAck(ackPacket);
-                cout << "发送ACK包，序列号：" << ntohl(namePacket.seqNum) << endl;
+                cout << "ACK packet sent, sequence number: " << ntohl(namePacket.seqNum) << endl;
 
                 nameReceived = true;
             } else {
@@ -342,7 +342,7 @@ void ReliableUDPServer::receiveFile() {
     size_t receivedBytes = 0;
     ofstream outputFile(fileName, ios::binary);
     if (!outputFile.is_open()) {
-        cerr << "无法创建文件: " << fileName << endl;
+        cout << "Unable to create file: " << fileName << endl;
         return;
     }
 
@@ -362,7 +362,7 @@ void ReliableUDPServer::receiveFile() {
                 ackPacket.seqNum = htonl(sequenceNumber++);
                 ackPacket.computeChecksum();
                 sendAck(ackPacket);
-                cout << "发送ACK包，序列号：" << ntohl(dataPacket.seqNum) << endl;
+                cout << "ACK packet sent, sequence number: " << ntohl(dataPacket.seqNum) << endl;
             } else {
                 // 重复包或校验和错误
                 sendDuplicateAck(dataPacket);
@@ -371,7 +371,7 @@ void ReliableUDPServer::receiveFile() {
     }
 
     outputFile.close();
-    cout << "文件接收完成: " << fileName << endl;
+    cout << "File reception completed: " << fileName << endl;
 }
 
 void ReliableUDPServer::sendDuplicateAck(const Packet& packet) {
@@ -380,7 +380,7 @@ void ReliableUDPServer::sendDuplicateAck(const Packet& packet) {
     ackPacket.ackNum = htonl(ntohl(packet.seqNum) + 1);
     ackPacket.computeChecksum();
     sendAck(ackPacket);
-    cout << "发送重复ACK包，序列号：" << ntohl(packet.seqNum) << endl;
+    cout << "Sending duplicate ACK packet, sequence number: " << ntohl(packet.seqNum) << endl;
 }
 
 int main()
